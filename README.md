@@ -82,7 +82,7 @@ This repository contains the **Phase 1** MVP:
    python -m unittest tests/test_aggregator.py
    ```
 
-   If all tests pass, the Phase 1 aggregator is operational!
+   - If all tests pass, the Phase 1 aggregator is operational!
 
 ---
 
@@ -105,9 +105,9 @@ python aggregator.py create --content "The sun is a star." \
 - `--tags`: Comma-separated tags.
 - `--source`: Reference or link for the content’s provenance.
 
-This command returns:
-- A unique UUID (fractal hash).
-- An IPFS CID for the JSON file storing the AKU.
+- This command returns:
+   - A unique UUID (fractal hash).
+   - An IPFS CID for the JSON file storing the AKU.
 
 **Example Output:**
 
@@ -184,8 +184,8 @@ This project is licensed under the AGPLv3. See [LICENSE](./LICENSE) for details.
 
 ## Contact / Community
 
-- **Project Owner:** Your Name or Handle
-- **Chat / Discussion:** Join [Discord or other forum] (link to be added)
-- **Issues:** [GitHub Issues](https://github.com/<your-username>/Decentralized-Knowledge-Universe/issues)
+- **Project Owner:** [@Celebr4tion](https://github.com/Celebr4tion)
+- **Chat / Discussion:** (to be created)
+- **Issues:** [GitHub Issues](https://github.com/Celebr4tion/Decentralized-Knowledge-Universe/issues)
 
 Thank you for helping build a decentralized knowledge ecosystem!
