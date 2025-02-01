@@ -1,19 +1,22 @@
 import argparse
 import json
 import zstandard
-import ipfshttpclient
-from fractal_hash import fractal_hash
+import tempfile
+import os
+import sys
+from .fractal_hash import fractal_hash
+from .ipfs_utils import ipfs_check, add_file_to_ipfs
 
 def create_aku(content: str, tags: list, source: str) -> dict:
-    """Constructs an AKU dict, compresses content, calculates fractal hash."""
-    # 1) Compress content
+    """Constructs an AKU dict, compresses content, and calculates the fractal hash."""
+    # 1) Compress the content
     compressor = zstandard.ZstdCompressor()
     compressed = compressor.compress(content.encode('utf-8'))
 
     # 2) Build metadata
     metadata = {
         "tags": tags,
-        "embeddings": [0.0 for _ in range(384)],  # placeholder
+        "embeddings": [0.0 for _ in range(384)],  # placeholder for embeddings
         "sources": [
             {
                 "type": "general",
@@ -22,7 +25,7 @@ def create_aku(content: str, tags: list, source: str) -> dict:
         ]
     }
 
-    # 3) Calculate fractal hash
+    # 3) Calculate fractal hash (unique identifier)
     uuid = fractal_hash(compressed, metadata)
 
     # 4) Initialize metrics
@@ -40,31 +43,69 @@ def create_aku(content: str, tags: list, source: str) -> dict:
     }
     return aku
 
-def store_aku(aku: dict, ipfs_client) -> str:
-    """Convert the AKU to JSON, add to IPFS, return the resulting CID."""
-    # Convert bytes to hex so JSON can handle it
+def store_aku(aku: dict) -> str:
+    """
+    Stores the AKU (as a JSON file) on IPFS and returns the CID.
+    This function writes the JSON to a temporary file and then calls the external ipfs command.
+    """
+    # Convert the AKU dictionary to JSON.
+    # We need to encode the binary content as hex for JSON serialization.
     aku_copy = aku.copy()
     aku_copy["content_compressed"] = aku_copy["content_compressed"].hex()
+    aku_json = json.dumps(aku_copy, indent=2)
 
-    aku_json = json.dumps(aku_copy)
-    cid = ipfs_client.add_json(aku_json)
-    return cid
+    # Write the JSON to a temporary file
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as tmp_file:
+        tmp_file.write(aku_json)
+        tmp_file_path = tmp_file.name
 
-def retrieve_aku(cid: str, ipfs_client) -> dict:
-    """Fetch and reconstruct AKU from IPFS by CID."""
-    aku_json = ipfs_client.get_json(cid)
-    aku_dict = json.loads(aku_json)
-    # Convert hex back to bytes
+    # Use our helper function to add the file to IPFS
+    cids = add_file_to_ipfs(tmp_file_path)
+    # Optionally remove the temporary file after adding
+    os.remove(tmp_file_path)
+
+    # For simplicity, return the first CID in the list (if multiple lines are returned)
+    if cids:
+        return cids[0]
+    else:
+        print("Error: No CID returned from IPFS.")
+        sys.exit(1)
+
+def retrieve_aku(cid: str) -> dict:
+    """
+    Retrieve an AKU from IPFS using the CID.
+    This function downloads the file using the ipfs command and reconstructs the AKU.
+    """
+    import subprocess  # Import here if not already imported above
+    # Create a temporary file to store the downloaded JSON.
+    tmp_file_path = tempfile.mktemp(suffix=".json")
+    cmd = 'ipfs get -o "{}" "{}"'.format(tmp_file_path, cid)
+    try:
+        subprocess.check_output(cmd, shell=True)
+    except subprocess.CalledProcessError as e:
+        print("IPFS get failed for CID {}: {}".format(cid, e))
+        sys.exit(1)
+
+    # Read the JSON back in
+    with open(tmp_file_path, "r") as f:
+        aku_dict = json.load(f)
+    os.remove(tmp_file_path)
+
+    # Convert the hex string back to bytes for content_compressed
     aku_dict["content_compressed"] = bytes.fromhex(aku_dict["content_compressed"])
     return aku_dict
 
 def decompress_content(aku: dict) -> str:
-    """Return the original textual content from an AKU dict."""
+    """Decompress the content from the AKU dictionary and return the original text."""
     decompressor = zstandard.ZstdDecompressor()
     raw = decompressor.decompress(aku["content_compressed"])
     return raw.decode('utf-8')
 
 def main():
+    # Ensure IPFS daemon is running
+    from .ipfs_utils import ipfs_check
+    ipfs_check()
+
     parser = argparse.ArgumentParser(
         description="DKU Phase 1 Aggregator: Create or Retrieve AKUs."
     )
@@ -72,9 +113,9 @@ def main():
 
     # Create command
     create_parser = subparsers.add_parser("create", help="Create a new AKU.")
-    create_parser.add_argument("--content", required=True, help="Textual content for the AKU.")
+    create_parser.add_argument("--content", required=True, help="Text content for the AKU.")
     create_parser.add_argument("--tags", required=False, default="", help="Comma-separated tags.")
-    create_parser.add_argument("--source", required=False, default="", help="Source link or reference.")
+    create_parser.add_argument("--source", required=False, default="", help="Source URL or reference.")
 
     # Retrieve command
     retrieve_parser = subparsers.add_parser("retrieve", help="Retrieve an AKU by CID.")
@@ -82,30 +123,26 @@ def main():
 
     args = parser.parse_args()
 
-    # Connect to local IPFS
-    ipfs_client = ipfshttpclient.connect('/ip4/127.0.0.1/tcp/5001')
-
     if args.command == "create":
         content = args.content
         tags = [t.strip() for t in args.tags.split(",")] if args.tags else []
         source = args.source
 
         aku = create_aku(content, tags, source)
-        cid = store_aku(aku, ipfs_client)
+        cid = store_aku(aku)
 
         print("AKU created!")
-        print(f"UUID: {aku['uuid']}")
-        print(f"CID: {cid}")
+        print("UUID: {}".format(aku["uuid"]))
+        print("CID: {}".format(cid))
 
     elif args.command == "retrieve":
         cid = args.cid
-        aku = retrieve_aku(cid, ipfs_client)
+        aku = retrieve_aku(cid)
         original_text = decompress_content(aku)
-        print(f"UUID: {aku['uuid']}")
-        print(f"Content: {original_text}")
-        print("Metadata:", json.dumps(aku["metadata"], indent=2))
-        print("Metrics:", json.dumps(aku["metrics"], indent=2))
-
+        print("UUID: {}".format(aku["uuid"]))
+        print("Content: {}".format(original_text))
+        print("Metadata: {}".format(json.dumps(aku["metadata"], indent=2)))
+        print("Metrics: {}".format(json.dumps(aku["metrics"], indent=2)))
     else:
         parser.print_help()
 

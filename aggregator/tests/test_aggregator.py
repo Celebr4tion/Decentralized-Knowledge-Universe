@@ -1,32 +1,29 @@
 import unittest
 import zstandard
-import ipfshttpclient
-from aggregator import create_aku, store_aku, retrieve_aku, decompress_content
+from aggregator.aggregator import create_aku, store_aku, retrieve_aku, decompress_content
 
 class TestAggregator(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.client = ipfshttpclient.connect('/ip4/127.0.0.1/tcp/5001')
-
     def test_create_and_store_aku(self):
         content = "Test AKU content"
         tags = ["test", "phase1"]
         source = "https://example.com"
         aku = create_aku(content, tags, source)
-
-        # Basic checks
+        
+        # Basic checks on the AKU structure
         self.assertIn("uuid", aku)
         self.assertIn("content_compressed", aku)
         self.assertIn("metadata", aku)
         self.assertIn("metrics", aku)
-
-        cid = store_aku(aku, self.client)
+        
+        # Store the AKU in IPFS using the external IPFS command.
+        cid = store_aku(aku)
         self.assertIsNotNone(cid)
-
-        # Retrieve
-        aku_retrieved = retrieve_aku(cid, self.client)
+        print("Stored CID:", cid)
+        
+        # Retrieve the AKU from IPFS using its CID.
+        aku_retrieved = retrieve_aku(cid)
         original_text = decompress_content(aku_retrieved)
-
+        
         self.assertEqual(content, original_text)
         self.assertEqual(aku_retrieved["uuid"], aku["uuid"])
 
