@@ -1,0 +1,2 @@
+ipfshttpclient==0.8.0a2
+zstandard==0.19.0
