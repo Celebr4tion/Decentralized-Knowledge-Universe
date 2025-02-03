@@ -7,7 +7,8 @@ class TestAggregator(unittest.TestCase):
         content = "Test AKU content"
         tags = ["test", "phase1"]
         source = "https://example.com"
-        aku = create_aku(content, tags, source)
+        agent = "test-agent"
+        aku = create_aku(content, tags, source, agent)
         
         # Basic checks on the AKU structure
         self.assertIn("uuid", aku)

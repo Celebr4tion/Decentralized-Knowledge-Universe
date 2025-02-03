@@ -6,40 +6,36 @@ import os
 import sys
 from .fractal_hash import fractal_hash
 from .ipfs_utils import ipfs_check, add_file_to_ipfs
+import datetime
 
-def create_aku(content: str, tags: list, source: str) -> dict:
-    """Constructs an AKU dict, compresses content, and calculates the fractal hash."""
+def create_aku(content: str, tags: list, source: str, agent: str = "manual") -> dict:
+    """Constructs an improved AKU with versioning and enhanced metadata."""
     # 1) Compress the content
     compressor = zstandard.ZstdCompressor()
     compressed = compressor.compress(content.encode('utf-8'))
 
-    # 2) Build metadata
+    # 2) Build enhanced metadata
     metadata = {
         "tags": tags,
         "embeddings": [0.0 for _ in range(384)],  # placeholder for embeddings
-        "sources": [
-            {
-                "type": "general",
-                "url": source
-            }
-        ]
+        "sources": [{"type": "general", "url": source}],
+        "created_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "agent": agent
     }
 
-    # 3) Calculate fractal hash (unique identifier)
+    # 3) Calculate fractal hash (unique identifier) based on immutable fields
     uuid = fractal_hash(compressed, metadata)
 
     # 4) Initialize metrics
-    metrics = {
-        "richness": 0.0,
-        "truthfulness": 0.0,
-        "stability": 0.0
-    }
+    metrics = {"richness": 0.0, "truthfulness": 0.0, "stability": 0.0}
 
     aku = {
         "uuid": uuid,
+        "version": 1,
         "content_compressed": compressed,
         "metadata": metadata,
-        "metrics": metrics
+        "metrics": metrics,
+        "history": []  # For future updates
     }
     return aku
 
